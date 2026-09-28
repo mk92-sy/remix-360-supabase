@@ -28,6 +28,7 @@ import P7_5_AdminFeedbackEdit from './pages/P7_5_AdminFeedbackEdit'
 
 const T360 = '360도 다면 피드백'
 const TINSIGHT = '인사이트 피드백'
+const HOME = '/feedback' // 첫 화면(로그인) 경로
 
 function Page({ children }: { children: React.ReactNode }) {
   return <div className="h-full w-full animate-page">{children}</div>
@@ -170,14 +171,14 @@ function AppRoutes() {
     <div className="flex justify-center min-h-screen bg-neutral-900 transition-colors duration-300">
       <div className="w-full max-w-md h-screen bg-background-dark relative flex flex-col shadow-2xl overflow-hidden border-x border-white/5">
         <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<Page><P0_Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} showToast={showToast} theme={theme} onThemeChange={setTheme} /></Page>} />
-          <Route path="/code-change" element={<Page><P0_1_CodeChange currentName={me?.name || ''} showToast={showToast} onBack={() => navigate('/')} onComplete={handleCodeChange} /></Page>} />
+          <Route path={HOME} element={<Page><P0_Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} showToast={showToast} theme={theme} onThemeChange={setTheme} /></Page>} />
+          <Route path="/code-change" element={<Page><P0_1_CodeChange currentName={me?.name || ''} showToast={showToast} onBack={() => navigate(HOME)} onComplete={handleCodeChange} /></Page>} />
 
           <Route path="/category" element={<Page><P1_Category
             availableTypes={Array.from(new Set(sessions.filter((s) => s.members.some((m) => m.id === me?.id)).map((s) => s.type)))}
             onSelect360={() => { const s = pickSession(T360); if (s) { setActiveSession(s); navigate('/intro') } }}
             onSelectInsight={() => { const s = pickSession(TINSIGHT); if (s) { setActiveSession(s); navigate('/insight-intro') } }}
-            onBack={() => { setMe(null); setSessions([]); navigate('/') }}
+            onBack={() => { setMe(null); setSessions([]); navigate(HOME) }}
           /></Page>} />
           <Route path="/intro" element={<Page><P2_1_Intro onNext={() => navigate('/members')} onBack={() => navigate('/category')} /></Page>} />
           <Route path="/members" element={<Page><P2_2_MemberList
@@ -200,7 +201,7 @@ function AppRoutes() {
             onBack={() => navigate('/insight-intro')}
           /></Page>} />
 
-          <Route path="/admin" element={<Page><P4_AdminDashboard onGoToDashboard={() => navigate('/admin/results')} onGoToAddFeedback={() => navigate('/admin/sessions')} onGoToPasswordChange={() => navigate('/admin/password')} onBack={() => { setAdminId(''); setAdminPw(''); setSessions([]); navigate('/') }} /></Page>} />
+          <Route path="/admin" element={<Page><P4_AdminDashboard onGoToDashboard={() => navigate('/admin/results')} onGoToAddFeedback={() => navigate('/admin/sessions')} onGoToPasswordChange={() => navigate('/admin/password')} onBack={() => { setAdminId(''); setAdminPw(''); setSessions([]); navigate(HOME) }} /></Page>} />
           <Route path="/admin/password" element={<Page><P4_1_AdminPasswordChange currentAdminPassword={adminPw} showToast={showToast} onBack={() => navigate('/admin')} onPasswordChanged={handlePasswordChanged} /></Page>} />
           <Route path="/admin/results" element={<Page><P5_AdminDashboard onSelect360={() => navigate('/admin/results/360')} onSelectInsight={() => navigate('/admin/results/insight')} onBack={() => navigate('/admin')} /></Page>} />
           <Route path="/admin/results/360" element={<Page><P5_1_AdminMemberList
@@ -269,7 +270,7 @@ function AppRoutes() {
             onBack={() => navigate('/admin/sessions/detail')}
           />}</Page>} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to={HOME} replace />} />
         </Routes>
         {toastMessage && <Toast message={toastMessage} type={toastType} />}
       </div>
