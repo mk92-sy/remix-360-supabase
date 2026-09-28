@@ -6,14 +6,13 @@ import type { ShowToast } from '../types'
 
 interface Props {
   onLogin: (name: string, code: string) => void
-  onAdminLogin: (password: string) => void
-  adminPassword: string
+  onAdminLogin: (id: string, password: string) => void
   showToast: ShowToast
   theme: 'light' | 'dark'
   onThemeChange: (t: 'light' | 'dark') => void
 }
 
-export default function P0_Login({ onLogin, onAdminLogin, adminPassword, showToast, theme, onThemeChange }: Props) {
+export default function P0_Login({ onLogin, onAdminLogin, showToast, theme, onThemeChange }: Props) {
   const [showAdmin, setShowAdmin] = useState(false)
   const [adminId, setAdminId] = useState('')
   const [password, setPassword] = useState('')
@@ -22,8 +21,9 @@ export default function P0_Login({ onLogin, onAdminLogin, adminPassword, showToa
 
   const submitAdmin = (e: FormEvent) => {
     e.preventDefault()
-    if (password === adminPassword) onAdminLogin(password)
-    else showToast('비밀번호가 틀렸습니다.', 'warning')
+    if (!adminId.trim()) return showToast('아이디를 입력해주세요.', 'warning')
+    if (!password) return showToast('비밀번호를 입력해주세요.', 'warning')
+    onAdminLogin(adminId.trim(), password)
   }
 
   const submitUser = () => {

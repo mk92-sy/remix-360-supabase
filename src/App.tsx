@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useToast } from './hooks/useToast'
-import { initialSessions } from './data/mock'
+import { api, errorMessage } from './lib/api'
 import type { FeedbackSession, Member } from './types'
 
 import Toast from './components/Toast'
@@ -38,15 +38,16 @@ function AppRoutes() {
   const location = useLocation()
   const { toastMessage, toastType, showToast } = useToast()
 
-  // TODO(supabase): 아래 상태들은 Supabase 쿼리/세션(auth)으로 대체하세요.
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [me, setMe] = useState<Member | null>(null)
-  const [sessions, setSessions] = useState<FeedbackSession[]>(initialSessions)
+  const [sessions, setSessions] = useState<FeedbackSession[]>([])
   const [activeSession, setActiveSession] = useState<FeedbackSession | null>(null)
   const [selectedSession, setSelectedSession] = useState<FeedbackSession | null>(null)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [selectedYear, setSelectedYear] = useState('2025')
-  const [adminPassword, setAdminPassword] = useState('0000')
+  // 관리자 로그인 성공 시 비밀번호를 메모리에만 보관 (새로고침하면 로그아웃). 모든 관리자 RPC 호출에 사용
+  const [adminId, setAdminId] = useState('')
+  const [adminPw, setAdminPw] = useState('')
   const [tempSession, setTempSession] = useState<Partial<FeedbackSession>>({})
   const [tempMembers, setTempMembers] = useState<Member[]>([])
 
@@ -58,71 +59,125 @@ function AppRoutes() {
     setSessions((prev) => prev.map((s) => (s.id === id ? fn(s) : s)))
 
   const liveActive = sessions.find((s) => s.id === activeSession?.id) ?? null
-  const todo = (label: string) => showToast(`${label}은(는) Supabase 연동 후 제공됩니다.`, 'warning')
+  const todo = (label: string) => showToast(`${label}은(는) 준비 중입니다.`, 'warning')
+
+  const guard = async (fn: () => Promise<void>) => {
+    try {
+      await fn()
+    } catch (e) {
+      showToast(errorMessage(e), 'warning')
+    }
+  }
+
+  const loadAdmin = async (id: string, pw: string) => setSessions(await api.adminGetAll(id, pw))
 
   /* ---------- user flow ---------- */
-  const handleLogin = (name: string, code: string) => {
-    const found = sessions.flatMap((s) => s.members).find((m) => m.name === name && m.loginCode === code)
-    if (!found) return showToast('이름 또는 코드가 일치하지 않습니다.', 'warning')
-    setMe(found)
-    navigate(found.isFirstLogin ? '/code-change' : '/category')
-  }
-
-  const handleAdminLogin = () => navigate('/admin')
-
-  const handleFeedbackComplete = (memberId: string, good: string, suggestions: string, rehire: boolean) => {
-    if (!liveActive || !me) return
-    patch(liveActive.id, (s) => {
-      const others = (s.feedbacks?.[memberId] ?? []).filter((f) => f.authorHash !== me.id)
-      return { ...s, feedbacks: { ...s.feedbacks, [memberId]: [...others, { good, suggestions, rehire, authorHash: me.id }] } }
+  const handleLogin = (name: string, code: string) =>
+    guard(async () => {
+      const u = await api.memberLogin(name, code)
+      setSessions(await api.mySessions(u.id, name, code))
+      setMe({ id: u.id, name: u.name, team: u.team, isAvailable: true, loginCode: code, isFirstLogin: u.isFirstLogin })
+      navigate(u.isFirstLogin ? '/code-change' : '/category')
     })
-    showToast('피드백이 저장되었습니다.', 'success')
-    navigate('/members')
-  }
 
-  const handleInsightComplete = (content: string) => {
-    if (!liveActive || !me) return
-    patch(liveActive.id, (s) => ({
-      ...s,
-      insights: [...(s.insights ?? []).filter((i) => i.authorHash !== me.id), { content, authorHash: me.id }],
-    }))
-    showToast('완료되었습니다.', 'success')
-    navigate('/category')
-  }
+  const handleCodeChange = (newCode: string) =>
+    guard(async () => {
+      if (!me) return
+      await api.changeCode(me.name, me.loginCode ?? '', newCode)
+      setMe({ ...me, loginCode: newCode, isFirstLogin: false })
+      showToast('코드가 성공적으로 변경되었습니다.', 'success')
+      navigate('/category')
+    })
+
+  const handleFeedbackComplete = (memberId: string, good: string, suggestions: string, rehire: boolean) =>
+    guard(async () => {
+      if (!liveActive || !me) return
+      await api.saveFeedback(me.name, me.loginCode ?? '', liveActive.id, memberId, good, suggestions, rehire)
+      patch(liveActive.id, (s) => {
+        const others = (s.feedbacks?.[memberId] ?? []).filter((f) => f.authorHash !== me.id)
+        return { ...s, feedbacks: { ...s.feedbacks, [memberId]: [...others, { good, suggestions, rehire, authorHash: me.id }] } }
+      })
+      showToast('피드백이 저장되었습니다.', 'success')
+      navigate('/members')
+    })
+
+  const handleInsightComplete = (content: string) =>
+    guard(async () => {
+      if (!liveActive || !me) return
+      await api.saveInsight(me.name, me.loginCode ?? '', liveActive.id, content)
+      patch(liveActive.id, (s) => ({
+        ...s,
+        insights: [...(s.insights ?? []).filter((i) => i.authorHash !== me.id), { content, authorHash: me.id }],
+      }))
+      showToast('완료되었습니다.', 'success')
+      navigate('/category')
+    })
 
   const pickSession = (type: string) => sessions.find((s) => s.type === type && s.members.some((m) => m.id === me?.id))
 
   /* ---------- admin flow ---------- */
-  const handleRegisterSession = () => {
-    const { year, type, code, period } = tempSession
-    if (!year || !type) return
-    const s: FeedbackSession = {
-      id: Math.random().toString(36).slice(2, 11),
-      year, type, period: period ?? '', code: code ?? `DND${year}`, members: tempMembers,
-      ...(type === T360 ? { feedbacks: {} } : { insights: [] }),
-    }
-    setSessions((prev) => [...prev, s])
-    setSelectedSession(null)
-    setTempMembers([])
-    navigate('/admin/sessions')
-  }
+  const handleAdminLogin = (id: string, password: string) =>
+    guard(async () => {
+      await api.adminLogin(id, password)
+      await loadAdmin(id, password)
+      setAdminId(id)
+      setAdminPw(password)
+      navigate('/admin')
+    })
+
+  const handleRegisterSession = () =>
+    guard(async () => {
+      const { year, type, code, period } = tempSession
+      if (!year || !type) return
+      await api.adminCreateSession(adminId, adminPw, year, type, period ?? '', code ?? `DND${year}`, tempMembers)
+      await loadAdmin(adminId, adminPw)
+      setSelectedSession(null)
+      setTempMembers([])
+      navigate('/admin/sessions')
+    })
+
+  const handleDeleteSession = (id: string) =>
+    guard(async () => {
+      await api.adminDeleteSession(adminId, adminPw, id)
+      setSessions((p) => p.filter((s) => s.id !== id))
+      setSelectedSession(null)
+      showToast('삭제되었습니다.', 'success')
+      navigate('/admin/sessions')
+    })
+
+  const handleSaveSession = (u: FeedbackSession) =>
+    guard(async () => {
+      await api.adminUpdateSession(adminId, adminPw, u.id, u.period, u.members)
+      await loadAdmin(adminId, adminPw)
+      setSelectedSession(u)
+      navigate('/admin/sessions/detail')
+    })
+
+  const handleResetCode = (sessionId: string, memberId: string) =>
+    guard(async () => {
+      await api.adminResetCode(adminId, adminPw, sessionId, memberId)
+      showToast('비밀번호가 초기화되었습니다.', 'success')
+    })
+
+  const handlePasswordChanged = (pw: string) =>
+    guard(async () => {
+      await api.adminChangePassword(adminId, adminPw, pw)
+      setAdminPw(pw)
+      navigate('/admin')
+    })
 
   return (
     <div className="flex justify-center min-h-screen bg-neutral-900 transition-colors duration-300">
       <div className="w-full max-w-md h-screen bg-background-dark relative flex flex-col shadow-2xl overflow-hidden border-x border-white/5">
         <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<Page><P0_Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} adminPassword={adminPassword} showToast={showToast} theme={theme} onThemeChange={setTheme} /></Page>} />
-          <Route path="/code-change" element={<Page><P0_1_CodeChange currentName={me?.name || ''} showToast={showToast} onBack={() => navigate('/')} onComplete={(newCode) => {
-            if (me) setMe({ ...me, loginCode: newCode, isFirstLogin: false })
-            showToast('코드가 성공적으로 변경되었습니다.', 'success')
-            navigate('/category')
-          }} /></Page>} />
+          <Route path="/" element={<Page><P0_Login onLogin={handleLogin} onAdminLogin={handleAdminLogin} showToast={showToast} theme={theme} onThemeChange={setTheme} /></Page>} />
+          <Route path="/code-change" element={<Page><P0_1_CodeChange currentName={me?.name || ''} showToast={showToast} onBack={() => navigate('/')} onComplete={handleCodeChange} /></Page>} />
 
           <Route path="/category" element={<Page><P1_Category
             availableTypes={Array.from(new Set(sessions.filter((s) => s.members.some((m) => m.id === me?.id)).map((s) => s.type)))}
             onSelect360={() => { const s = pickSession(T360); if (s) { setActiveSession(s); navigate('/intro') } }}
             onSelectInsight={() => { const s = pickSession(TINSIGHT); if (s) { setActiveSession(s); navigate('/insight-intro') } }}
-            onBack={() => { setMe(null); navigate('/') }}
+            onBack={() => { setMe(null); setSessions([]); navigate('/') }}
           /></Page>} />
           <Route path="/intro" element={<Page><P2_1_Intro onNext={() => navigate('/members')} onBack={() => navigate('/category')} /></Page>} />
           <Route path="/members" element={<Page><P2_2_MemberList
@@ -145,8 +200,8 @@ function AppRoutes() {
             onBack={() => navigate('/insight-intro')}
           /></Page>} />
 
-          <Route path="/admin" element={<Page><P4_AdminDashboard onGoToDashboard={() => navigate('/admin/results')} onGoToAddFeedback={() => navigate('/admin/sessions')} onGoToPasswordChange={() => navigate('/admin/password')} onBack={() => navigate('/')} /></Page>} />
-          <Route path="/admin/password" element={<Page><P4_1_AdminPasswordChange currentAdminPassword={adminPassword} showToast={showToast} onBack={() => navigate('/admin')} onPasswordChanged={(pw) => { setAdminPassword(pw); navigate('/admin') }} /></Page>} />
+          <Route path="/admin" element={<Page><P4_AdminDashboard onGoToDashboard={() => navigate('/admin/results')} onGoToAddFeedback={() => navigate('/admin/sessions')} onGoToPasswordChange={() => navigate('/admin/password')} onBack={() => { setAdminId(''); setAdminPw(''); setSessions([]); navigate('/') }} /></Page>} />
+          <Route path="/admin/password" element={<Page><P4_1_AdminPasswordChange currentAdminPassword={adminPw} showToast={showToast} onBack={() => navigate('/admin')} onPasswordChanged={handlePasswordChanged} /></Page>} />
           <Route path="/admin/results" element={<Page><P5_AdminDashboard onSelect360={() => navigate('/admin/results/360')} onSelectInsight={() => navigate('/admin/results/insight')} onBack={() => navigate('/admin')} /></Page>} />
           <Route path="/admin/results/360" element={<Page><P5_1_AdminMemberList
             sessions={sessions.filter((s) => s.type === T360)}
@@ -191,8 +246,8 @@ function AppRoutes() {
             showToast={showToast}
             onBack={() => navigate(selectedSession ? '/admin/sessions/edit' : '/admin/sessions/members')}
             onRegister={(data) => {
-              const code = selectedSession?.code || tempSession.code || `DND${selectedSession?.year || tempSession.year || new Date().getFullYear()}`
-              const nm: Member = { ...data, id: Math.random().toString(36).slice(2, 11), isAvailable: true, loginCode: code, isFirstLogin: true }
+              // 신규 직원은 서버에서 이름 기준으로 upsert 되므로 임시 id 는 화면용입니다.
+              const nm: Member = { ...data, id: Math.random().toString(36).slice(2, 11), isAvailable: true }
               if (selectedSession) { setSelectedSession({ ...selectedSession, members: [...selectedSession.members, nm] }); navigate('/admin/sessions/edit') }
               else { setTempMembers((p) => [...p, nm]); navigate('/admin/sessions/members') }
             }}
@@ -200,16 +255,17 @@ function AppRoutes() {
           <Route path="/admin/sessions/detail" element={<Page>{selectedSession && <P7_4_AdminFeedbackDetail
             session={selectedSession}
             onEdit={() => navigate('/admin/sessions/edit')}
-            onDelete={(id) => { setSessions((p) => p.filter((s) => s.id !== id)); setSelectedSession(null); showToast('삭제되었습니다.', 'success'); navigate('/admin/sessions') }}
-            onResetCode={() => showToast('비밀번호가 초기화되었습니다.', 'success')}
+            onDelete={handleDeleteSession}
+            onResetCode={handleResetCode}
             onBack={() => navigate('/admin/sessions')}
           />}</Page>} />
           <Route path="/admin/sessions/edit" element={<Page>{selectedSession && <P7_5_AdminFeedbackEdit
             key={selectedSession.id + selectedSession.members.length}
             session={selectedSession} showToast={showToast}
-            onSave={(u) => { setSessions((p) => p.map((s) => (s.id === u.id ? { ...s, ...u } : s))); setSelectedSession(u); navigate('/admin/sessions/detail') }}
+            onSave={handleSaveSession}
             onAddMember={(period, members) => { setSelectedSession({ ...selectedSession, period, members }); navigate('/admin/sessions/members/add') }}
-            onDeleteMember={(id) => patch(selectedSession.id, (s) => ({ ...s, members: s.members.filter((m) => m.id !== id) }))}
+            // 편집 화면의 삭제는 화면 상태에서만 반영하고, '수정완료' 시 서버와 동기화합니다.
+            onDeleteMember={() => {}}
             onBack={() => navigate('/admin/sessions/detail')}
           />}</Page>} />
 
