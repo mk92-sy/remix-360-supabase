@@ -1,29 +1,96 @@
-import { useState } from 'react'
-import { MdGroupAdd, MdSentimentSatisfied, MdSentimentDissatisfied, MdThumbUp, MdLightbulb, MdImage, MdPictureAsPdf, MdTableView } from 'react-icons/md'
-import Layout from '../components/Layout'
-import Modal from '../components/Modal'
-import type { Feedback, Member } from '../types'
+import { useState } from "react";
+import type { IconType } from "react-icons";
+import {
+  MdHandshake,
+  MdBusinessCenter,
+  MdFavorite,
+  MdThumbUp,
+  MdLightbulb,
+  MdTableView,
+  MdSentimentSatisfied,
+  MdSentimentNeutral,
+  MdSentimentDissatisfied,
+} from "react-icons/md";
+import Layout from "../components/Layout";
+import Modal from "../components/Modal";
+import { tally } from "../lib/tally";
+import type { ChoiceKey } from "../lib/tally";
+import { addReportSheet, createReportWorkbook, downloadWorkbook } from "../utils/exportExcel";
+import type { Row } from "../utils/exportExcel";
+import type { Feedback, Member } from "../types";
 
 interface Props {
-  member: Member | null
-  year: string
-  feedbackData: Feedback[] | null
-  onExport: (format: 'png' | 'pdf' | 'excel') => void
-  onBack: () => void
+  member: Member | null;
+  year: string;
+  feedbackData: Feedback[] | null;
+  onBack: () => void;
 }
 
-const empty = <div className="p-10 rounded-2xl bg-surface-dark/50 border border-dashed border-theme text-center text-theme-sub text-sm">피드백 내용이 없습니다.</div>
-const textCard = 'p-6 rounded-[20px] bg-surface-dark border border-theme text-[15px] leading-relaxed text-theme-main opacity-90 shadow-sm animate-slide'
+const empty = (
+  <div className="p-10 rounded-2xl bg-surface-dark/50 border border-dashed border-theme text-center text-theme-sub text-sm">
+    피드백 내용이 없습니다.
+  </div>
+);
+const textCard =
+  "p-6 rounded-[20px] bg-surface-dark border border-theme text-[15px] leading-relaxed text-theme-main opacity-90 shadow-sm animate-slide break-all whitespace-pre-wrap max-h-[285px] overflow-y-auto overscroll-auto";
 
-export default function P5_2_AdminMemberDetail({ member, year, feedbackData, onExport, onBack }: Props) {
-  const [showExport, setShowExport] = useState(false)
-  const good = feedbackData?.map((f) => f.good).filter(Boolean) ?? []
-  const sug = feedbackData?.map((f) => f.suggestions).filter(Boolean) ?? []
-  const rehire = feedbackData?.filter((f) => f.rehire !== undefined) ?? []
-  const likes = rehire.filter((f) => f.rehire === true).length
-  const dislikes = rehire.filter((f) => f.rehire === false).length
+function RehireCard({ title, Icon, list, k }: { title: string; Icon: IconType; list: Feedback[]; k: ChoiceKey }) {
+  const t = tally(list, k);
+  const cells: { label: string; n: number; Face: IconType; color: string }[] = [
+    { label: "좋아요", n: t.like, Face: MdSentimentSatisfied, color: "text-blue-400" },
+    { label: "그저그래요", n: t.neutral, Face: MdSentimentNeutral, color: "text-slate-400" },
+    { label: "싫어요", n: t.dislike, Face: MdSentimentDissatisfied, color: "text-slate-400" },
+  ];
+  return (
+    <div className="p-5 rounded-[20px] bg-surface-dark border border-theme shadow-sm space-y-3">
+      <span className="text-[14px] font-bold text-theme-main flex items-center gap-1.5">
+        <Icon className="text-accent text-[18px]" />
+        {title}
+      </span>
+      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-theme/40">
+        {cells.map(({ label, n, Face, color }) => (
+          <div key={label} className="flex items-center gap-2.5 p-2 rounded-xl bg-theme-highlight/40">
+            <Face className={`${color} text-[22px]`} />
+            <div className="flex flex-col">
+              <span className="text-[11px] text-theme-sub font-medium">{label}</span>
+              <span className={`text-[16px] font-extrabold ${color}`}>{n}명</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const pick = (f: 'png' | 'pdf' | 'excel') => { setShowExport(false); onExport(f) }
+export default function P5_2_AdminMemberDetail({ member, year, feedbackData, onBack }: Props) {
+  const [showExport, setShowExport] = useState(false);
+  const list = feedbackData ?? [];
+  const good = list.map((f) => f.good).filter(Boolean);
+  const sug = list.map((f) => f.suggestions).filter(Boolean);
+
+  const exportExcel = async () => {
+    setShowExport(false);
+    const base = { 연도: `${year}년`, 소속팀: member?.team || "", 사원명: member?.name || "" };
+    const rows: Row[] = [];
+    const max = Math.max(good.length, sug.length);
+    for (let i = 0; i < max; i++) rows.push({ ...base, 좋은점: good[i] || "", 바라는점: sug[i] || "" });
+    if (rows.length === 0) rows.push({ ...base, 좋은점: "작성된 피드백 없음", 바라는점: "작성된 피드백 없음" });
+
+    const wb = createReportWorkbook();
+    addReportSheet(wb, {
+      name: `${member?.name || "사원"}_피드백`,
+      columns: [
+        { header: "연도", key: "연도", width: 14 },
+        { header: "소속팀", key: "소속팀", width: 18 },
+        { header: "사원명", key: "사원명", width: 16 },
+        { header: "좋은점", key: "좋은점", width: 65 },
+        { header: "바라는점", key: "바라는점", width: 65 },
+      ],
+      rows,
+      mergeColumns: ["연도", "소속팀", "사원명"],
+    });
+    await downloadWorkbook(wb, `${year}년_${member?.name || "사원"}_360도_피드백.xlsx`);
+  };
 
   return (
     <Layout
@@ -31,48 +98,79 @@ export default function P5_2_AdminMemberDetail({ member, year, feedbackData, onE
       onBack={onBack}
       footer={
         <div className="flex gap-3 w-full">
-          <button onClick={onBack} className="flex-1 py-4 bg-surface-dark text-theme-main font-bold border border-theme rounded-2xl active:scale-95 transition-all">뒤로가기</button>
-          <button onClick={() => setShowExport(true)} className="flex-1 py-4 bg-accent text-white font-bold rounded-2xl active:scale-95 transition-all shadow-xl">공유하기</button>
+          <button
+            onClick={onBack}
+            className="flex-1 py-4 bg-surface-dark text-theme-main font-bold border border-theme rounded-2xl active:scale-95 transition-all"
+          >
+            뒤로가기
+          </button>
+          <button
+            onClick={() => setShowExport(true)}
+            className="flex-1 py-4 bg-accent text-white font-bold rounded-2xl active:scale-95 transition-all shadow-xl"
+          >
+            공유하기
+          </button>
         </div>
       }
     >
       <div className="bg-background-dark min-h-full">
         <div className="flex flex-col items-center px-6 pt-12 pb-8 text-center">
-          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-surface-dark border border-theme mb-6 shadow-sm"><span className="text-[14px] font-bold text-theme-main">{member?.name}</span></div>
+          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-surface-dark border border-theme mb-6 shadow-sm">
+            <span className="text-[14px] font-bold text-theme-main">{member?.name}</span>
+          </div>
           <div className="text-[20px] font-black text-theme-main mb-2 tracking-tight opacity-80">{year}년</div>
-          <h2 className="text-[28px] font-bold leading-tight text-theme-main mb-2">직원 역량 향상을 위한<br />360º 피드백</h2>
+          <h2 className="text-[28px] font-bold leading-tight text-theme-main mb-2">
+            직원 역량 향상을 위한
+            <br />
+            360º 피드백
+          </h2>
         </div>
         <div className="px-5 space-y-10 pb-16">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-[34px] h-[34px] rounded-full bg-accent/10 flex items-center justify-center"><MdGroupAdd className="text-[18px] text-accent" /></div>
+              <div className="w-[34px] h-[34px] rounded-full bg-accent/10 flex items-center justify-center">
+                <MdHandshake className="text-[18px] text-accent" />
+              </div>
               <p className="text-[20px] font-bold text-theme-main">재협업 희망 여부</p>
             </div>
-            <div className="p-6 rounded-[20px] bg-surface-dark border border-theme flex items-center gap-8 shadow-sm">
-              <div className="flex items-center gap-3">
-                <MdSentimentSatisfied className="text-accent text-[24px]" />
-                <div className="flex flex-col"><span className="text-[12px] text-theme-sub font-medium">좋아요</span><span className="text-[18px] font-bold text-accent">{likes}명</span></div>
-              </div>
-              <div className="w-[1px] h-8 bg-theme-highlight" />
-              <div className="flex items-center gap-3">
-                <MdSentimentDissatisfied className="text-theme-sub text-[24px]" />
-                <div className="flex flex-col"><span className="text-[12px] text-theme-sub font-medium">아니요</span><span className="text-[18px] font-bold text-theme-main">{dislikes}명</span></div>
-              </div>
+            <div className="space-y-3">
+              <RehireCard title="업무적 협업" Icon={MdBusinessCenter} list={list} k="workRehire" />
+              <RehireCard title="태도 및 소통 협업" Icon={MdFavorite} list={list} k="personalRehire" />
             </div>
           </div>
 
           {[
-            { label: '좋은점', list: good, bg: 'bg-blue-500/10', icon: <MdThumbUp className="text-[18px] text-blue-500" /> },
-            { label: '바라는점', list: sug, bg: 'bg-orange-500/10', icon: <MdLightbulb className="text-[18px] text-orange-500" /> },
+            {
+              label: "좋은점",
+              items: good,
+              bg: "bg-blue-500/10",
+              icon: <MdThumbUp className="text-[18px] text-blue-500" />,
+            },
+            {
+              label: "바라는점",
+              items: sug,
+              bg: "bg-orange-500/10",
+              icon: <MdLightbulb className="text-[18px] text-orange-500" />,
+            },
           ].map((sec) => (
             <div key={sec.label} className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className={`w-[34px] h-[34px] rounded-full ${sec.bg} flex items-center justify-center`}>{sec.icon}</div>
+                <div className={`w-[34px] h-[34px] rounded-full ${sec.bg} flex items-center justify-center`}>
+                  {sec.icon}
+                </div>
                 <p className="text-[20px] font-bold text-theme-main">{sec.label}</p>
-                <div className="px-2 py-0.5 rounded-md bg-theme-highlight text-[13px] text-theme-sub font-medium">{sec.list.length}개</div>
+                <div className="px-2 py-0.5 rounded-md bg-theme-highlight text-[13px] text-theme-sub font-medium">
+                  {sec.items.length}개
+                </div>
               </div>
               <div className="space-y-3">
-                {sec.list.length > 0 ? sec.list.map((t, i) => <div key={i} className={textCard}>{t}</div>) : empty}
+                {sec.items.length > 0
+                  ? sec.items.map((t, i) => (
+                      <div key={i} className={textCard}>
+                        {t}
+                      </div>
+                    ))
+                  : empty}
               </div>
             </div>
           ))}
@@ -80,18 +178,24 @@ export default function P5_2_AdminMemberDetail({ member, year, feedbackData, onE
       </div>
 
       {showExport && (
-        <Modal title="공유 형식 선택" onClose={() => setShowExport(false)}>
-          <div className="grid grid-cols-3 gap-3 mb-8 mt-5">
-            {([['png', 'PNG', MdImage], ['pdf', 'PDF', MdPictureAsPdf], ['excel', 'Excel', MdTableView]] as const).map(([k, l, Icon]) => (
-              <button key={k} onClick={() => pick(k)} className="flex flex-col items-center justify-center gap-3 p-4 rounded-3xl bg-theme-highlight border border-theme hover:bg-accent hover:text-white active:scale-95 transition-all text-theme-main">
-                <Icon className="text-[28px]" />
-                <span className="text-[12px] font-bold">{l}</span>
-              </button>
-            ))}
+        <Modal title="피드백 공유하기" onClose={() => setShowExport(false)}>
+          <div className="mt-6 mb-6">
+            <button
+              onClick={exportExcel}
+              className="w-full flex items-center justify-center gap-3 py-4 px-5 rounded-2xl bg-accent text-white font-bold text-[15px] active:scale-95 transition-all shadow-lg hover:brightness-110"
+            >
+              <MdTableView className="text-[24px]" />
+              <span>Excel 파일로 다운로드</span>
+            </button>
           </div>
-          <button onClick={() => setShowExport(false)} className="w-full py-4 bg-background-dark text-theme-sub border border-theme font-bold rounded-2xl active:scale-95 transition-all text-[15px]">취소</button>
+          <button
+            onClick={() => setShowExport(false)}
+            className="w-full py-3.5 bg-background-dark text-theme-sub border border-theme font-bold rounded-2xl active:scale-95 transition-all text-[15px]"
+          >
+            취소
+          </button>
         </Modal>
       )}
     </Layout>
-  )
+  );
 }
