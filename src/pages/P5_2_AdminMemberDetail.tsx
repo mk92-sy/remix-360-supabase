@@ -23,7 +23,7 @@ const empty = (
   </div>
 );
 const textCard =
-  "p-6 rounded-[20px] bg-surface-dark border border-theme text-[15px] leading-relaxed text-theme-main opacity-90 shadow-sm animate-slide break-all whitespace-pre-wrap max-h-[285px] overflow-y-auto overscroll-auto";
+  "custom-scrollbar p-6 rounded-[20px] bg-surface-dark border border-theme text-[15px] leading-relaxed text-theme-main opacity-90 shadow-sm animate-slide break-all whitespace-pre-wrap max-h-[285px] overflow-y-auto overscroll-auto";
 
 function RehireCard({ title, Icon, list, k }: { title: string; Icon: IconType; list: Feedback[]; k: ChoiceKey }) {
   const t = tally(list, k);

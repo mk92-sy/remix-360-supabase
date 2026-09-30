@@ -13,7 +13,7 @@ interface Props {
 }
 
 const area =
-  "w-full min-h-[160px] rounded-2xl bg-surface-dark border border-theme p-5 text-sm leading-relaxed text-theme-main focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-theme-sub/50 shadow-sm";
+  "custom-scrollbar w-full min-h-[160px] rounded-2xl bg-surface-dark border border-theme p-5 text-sm leading-relaxed text-theme-main focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-theme-sub/50 shadow-sm";
 
 const OPTIONS: { label: Choice; mood: "like" | "neutral" | "dislike"; color: string }[] = [
   { label: "좋아요", mood: "like", color: "text-slate-400" },

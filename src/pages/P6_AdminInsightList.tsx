@@ -126,7 +126,7 @@ export default function P6_AdminInsightList({ sessions, onBack }: Props) {
                   )}
                   {insights.map((i, k) => (
                     <div key={k} className="p-6 rounded-[24px] bg-surface-dark border border-theme shadow-sm">
-                      <p className="text-[15px] leading-relaxed text-theme-main opacity-80 break-all whitespace-pre-wrap max-h-[285px] overflow-y-auto overscroll-contain">
+                      <p className="custom-scrollbar text-[15px] leading-relaxed text-theme-main opacity-80 break-all whitespace-pre-wrap max-h-[285px] overflow-y-auto overscroll-contain">
                         {i.content}
                       </p>
                     </div>
