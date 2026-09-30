@@ -199,6 +199,20 @@ function AppRoutes() {
       navigate("/admin");
     });
 
+  const requiresMemberLogin = [
+    "/code-change",
+    "/category",
+    "/intro",
+    "/members",
+    "/write",
+    "/insight-intro",
+    "/insight-write",
+  ].includes(location.pathname);
+
+  if ((!me && requiresMemberLogin) || (!adminId && location.pathname.startsWith("/admin"))) {
+    return <Navigate to={HOME} replace />;
+  }
+
   return (
     <div className="flex justify-center min-h-screen bg-neutral-900 transition-colors duration-300">
       <div className="w-full max-w-md h-screen bg-background-dark relative flex flex-col shadow-2xl overflow-hidden border-x border-white/5">

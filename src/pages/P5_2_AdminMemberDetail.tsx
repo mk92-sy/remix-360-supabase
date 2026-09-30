@@ -1,16 +1,7 @@
 import { useState } from "react";
 import type { IconType } from "react-icons";
-import {
-  MdHandshake,
-  MdBusinessCenter,
-  MdFavorite,
-  MdThumbUp,
-  MdLightbulb,
-  MdTableView,
-  MdSentimentSatisfied,
-  MdSentimentNeutral,
-  MdSentimentDissatisfied,
-} from "react-icons/md";
+import { MdHandshake, MdBusinessCenter, MdFavorite, MdThumbUp, MdLightbulb, MdTableView } from "react-icons/md";
+import FeedbackFace from "../components/FeedbackFace";
 import Layout from "../components/Layout";
 import Modal from "../components/Modal";
 import { tally } from "../lib/tally";
@@ -36,10 +27,10 @@ const textCard =
 
 function RehireCard({ title, Icon, list, k }: { title: string; Icon: IconType; list: Feedback[]; k: ChoiceKey }) {
   const t = tally(list, k);
-  const cells: { label: string; n: number; Face: IconType; color: string }[] = [
-    { label: "좋아요", n: t.like, Face: MdSentimentSatisfied, color: "text-blue-400" },
-    { label: "그저그래요", n: t.neutral, Face: MdSentimentNeutral, color: "text-slate-400" },
-    { label: "싫어요", n: t.dislike, Face: MdSentimentDissatisfied, color: "text-slate-400" },
+  const cells: { label: string; n: number; mood: "like" | "neutral" | "dislike"; color: string }[] = [
+    { label: "좋아요", n: t.like, mood: "like", color: "text-blue-400" },
+    { label: "그저그래요", n: t.neutral, mood: "neutral", color: "text-slate-400" },
+    { label: "싫어요", n: t.dislike, mood: "dislike", color: "text-slate-400" },
   ];
   return (
     <div className="p-5 rounded-[20px] bg-surface-dark border border-theme shadow-sm space-y-3">
@@ -48,9 +39,9 @@ function RehireCard({ title, Icon, list, k }: { title: string; Icon: IconType; l
         {title}
       </span>
       <div className="grid grid-cols-3 gap-2 pt-1 border-t border-theme/40">
-        {cells.map(({ label, n, Face, color }) => (
+        {cells.map(({ label, n, mood, color }) => (
           <div key={label} className="flex items-center gap-2.5 p-2 rounded-xl bg-theme-highlight/40">
-            <Face className={`${color} text-[22px]`} />
+            <FeedbackFace mood={mood} className={`${color} w-[22px] h-[22px]`} />
             <div className="flex flex-col">
               <span className="text-[11px] text-theme-sub font-medium">{label}</span>
               <span className={`text-[16px] font-extrabold ${color}`}>{n}명</span>

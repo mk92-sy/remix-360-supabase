@@ -1,15 +1,7 @@
 import { useState } from "react";
 import type { IconType } from "react-icons";
-import {
-  MdThumbUp,
-  MdLightbulb,
-  MdHandshake,
-  MdBusinessCenter,
-  MdFavorite,
-  MdSentimentSatisfied,
-  MdSentimentNeutral,
-  MdSentimentDissatisfied,
-} from "react-icons/md";
+import { MdThumbUp, MdLightbulb, MdHandshake, MdBusinessCenter, MdFavorite } from "react-icons/md";
+import FeedbackFace from "../components/FeedbackFace";
 import Layout from "../components/Layout";
 import type { Choice, Feedback, Member } from "../types";
 
@@ -23,10 +15,10 @@ interface Props {
 const area =
   "w-full min-h-[160px] rounded-2xl bg-surface-dark border border-theme p-5 text-sm leading-relaxed text-theme-main focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-theme-sub/50 shadow-sm";
 
-const OPTIONS: { label: Choice; Icon: IconType }[] = [
-  { label: "좋아요", Icon: MdSentimentSatisfied },
-  { label: "그저그래요", Icon: MdSentimentNeutral },
-  { label: "싫어요", Icon: MdSentimentDissatisfied },
+const OPTIONS: { label: Choice; mood: "like" | "neutral" | "dislike"; color: string }[] = [
+  { label: "좋아요", mood: "like", color: "text-slate-400" },
+  { label: "그저그래요", mood: "neutral", color: "text-slate-400" },
+  { label: "싫어요", mood: "dislike", color: "text-slate-400" },
 ];
 
 function ChoiceGroup({
@@ -50,7 +42,7 @@ function ChoiceGroup({
       </div>
       <p className="text-[12px] text-theme-sub opacity-70 leading-normal pl-0.5">{desc}</p>
       <div className="grid grid-cols-3 gap-2.5 pt-1">
-        {OPTIONS.map(({ label, Icon: Face }) => (
+        {OPTIONS.map(({ label, mood, color }) => (
           <button
             key={label}
             type="button"
@@ -61,7 +53,7 @@ function ChoiceGroup({
                 : "bg-surface-dark border-theme text-theme-sub hover:text-theme-main"
             }`}
           >
-            <Face className="text-[28px]" />
+            <FeedbackFace mood={mood} className={`w-[22px] h-[22px] ${value === label ? "text-white" : color}`} />
           </button>
         ))}
       </div>

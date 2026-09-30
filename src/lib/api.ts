@@ -198,7 +198,7 @@ export const errorMessage = (e: unknown) => {
   const m = e instanceof Error ? e.message : "";
   if (m.includes("INVALID_LOGIN")) return "이름 또는 코드가 일치하지 않습니다.";
   if (m.includes("INVALID_ADMIN")) return "아이디 또는 비밀번호가 틀렸습니다.";
-  if (m.includes("duplicate key")) return "이미 등록된 피드백(년도/유형)입니다.";
+  if (m.includes("duplicate key")) return "이미 등록된 피드백 세션이 존재합니다.";
   if (m.includes("CODE_TOO_SHORT")) return "코드는 최소 4자 이상이어야 합니다.";
   return "요청 처리 중 오류가 발생했습니다.";
 };
